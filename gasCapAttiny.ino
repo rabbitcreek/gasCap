@@ -4,18 +4,25 @@ float pressure = 0;
 float diff = 0.0;
 // Instantiate the sensor
 Adafruit_LPS28 lps28;
+#define HORN_PIN PIN_PA4
+
+
+
 
 void setup() {
-  Serial.begin(115200);
+  //Serial.begin(115200);
   //while (!Serial) delay(10); // Wait for Serial monitor
 
   Serial.println("LPS28 Test");
-pinMode(1, OUTPUT);
-digitalWrite(1, LOW);
+pinMode(HORN_PIN, OUTPUT);
+digitalWrite(HORN_PIN, LOW);
   // Initialize the sensor
   if (!lps28.begin()) {
     Serial.println("Failed to find LPS28 sensor!");
-    while (1) delay(10);
+    digitalWrite(HORN_PIN, HIGH);
+delay(1000);
+digitalWrite(HORN_PIN, LOW);
+delay(1000);
   }
 
   Serial.println("LPS28 sensor found!");
@@ -45,7 +52,7 @@ digitalWrite(1, LOW);
    if (lps28.getStatus() & LPS28_STATUS_PRESS_READY) { // Pressure data available
     // Read and print pressure and temperature
      pressure = lps28.getPressure();
-   }
+   } 
 }
 
 void loop() {
@@ -67,9 +74,9 @@ void loop() {
   delay(10); // Polling delay
 }
 void ringDing(){
-digitalWrite(1, HIGH);
+digitalWrite(HORN_PIN, HIGH);
 delay(1000/ diff);
-digitalWrite(1,LOW);
+digitalWrite(HORN_PIN,LOW);
 delay(1000/ diff);
 
 }
