@@ -1,7 +1,10 @@
 #include <Wire.h>
 #include <Adafruit_LPS28.h>
+#include <avr/sleep.h>
 
-#define HORN_PIN 1
+#define HORN_PIN PIN_PA4
+//#define HORN_PIN 1
+
 
 // Tunable thresholds
 #define TRIGGER_ON  1.5
@@ -17,6 +20,33 @@ bool alarmActive = false;
 unsigned long lastToggle = 0;
 bool hornState = false;
 bool firstTrigger = false;
+
+unsigned long startTime;
+
+// ------------------ SLEEP ------------------
+
+void sleepWarning(){
+  // distinctive pattern
+  digitalWrite(HORN_PIN, HIGH);
+  delay(300);
+  digitalWrite(HORN_PIN, LOW);
+  delay(150);
+  digitalWrite(HORN_PIN, HIGH);
+  delay(300);
+  digitalWrite(HORN_PIN, LOW);
+}
+
+void goToSleep(){
+
+  sleepWarning();
+
+  digitalWrite(HORN_PIN, LOW);
+  pinMode(HORN_PIN, INPUT); // reduce leakage
+
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  sleep_enable();
+  sleep_cpu();
+}
 
 // ------------------ SETUP ------------------
 
@@ -39,7 +69,7 @@ void setup() {
   lps28.setAveraging(LPS28_AVG_4);
   lps28.setFullScaleMode(true);
 
-  delay(1000); // allow sensor to settle
+  delay(1000); // sensor settle
 
   // Initial baseline
   float sum = 0;
@@ -58,6 +88,8 @@ void setup() {
     digitalWrite(HORN_PIN, LOW);
     delay(80);
   }
+
+  startTime = millis();  // start timer
 }
 
 // ------------------ LOOP ------------------
@@ -66,17 +98,17 @@ void loop() {
 
   float pressureNow = lps28.getPressure();
 
-  // Simple fast filter
+  // Fast filter
   filteredPressure = filteredPressure * 0.7 + pressureNow * 0.3;
 
   float diff = filteredPressure - baselinePressure;
 
-  // Slowly adapt baseline when idle
+  // Baseline tracking
   if (!alarmActive) {
     baselinePressure = baselinePressure * 0.99 + filteredPressure * 0.01;
   }
 
-  // Hysteresis control
+  // Hysteresis
   if (!alarmActive && diff > TRIGGER_ON) {
     alarmActive = true;
     firstTrigger = true;
@@ -90,7 +122,7 @@ void loop() {
   // Alarm behavior
   if (alarmActive) {
 
-    // Quick chirp on first trigger
+    // First chirp
     if (firstTrigger) {
       digitalWrite(HORN_PIN, HIGH);
       delay(80);
@@ -99,16 +131,13 @@ void loop() {
       firstTrigger = false;
     }
 
-    // Clamp diff
     float d = diff;
     if(d > 20) d = 20;
     if(d < 2) d = 2;
 
-    // Beep speed based on pressure
     int interval = 300 - (d * 10);
     if(interval < 60) interval = 60;
 
-    // Non-blocking toggle
     if (millis() - lastToggle > interval) {
       hornState = !hornState;
       lastToggle = millis();
@@ -117,6 +146,11 @@ void loop() {
 
   } else {
     digitalWrite(HORN_PIN, LOW);
+  }
+
+  // -------- AUTO SLEEP AFTER 5 MIN --------
+  if(millis() - startTime > 300000UL){
+    goToSleep();
   }
 
   delay(5);
